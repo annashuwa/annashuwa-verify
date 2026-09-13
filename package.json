@@ -1,0 +1,15 @@
+{
+  "name": "naija-verify",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Nigerian identity verification & API platform (modular monolith)",
+  "scripts": {
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "install:all": "npm --prefix backend install && npm --prefix frontend install",
+    "seed": "npm --prefix backend run seed",
+    "test": "npm --prefix backend test",
+    "typecheck": "npm --prefix backend run typecheck && npm --prefix frontend run typecheck",
+    "build": "npm --prefix backend run build && npm --prefix frontend run build"
+  }
+}

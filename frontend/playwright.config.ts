@@ -1,0 +1,14 @@
+import { defineConfig } from '@playwright/test';
+
+export default defineConfig({
+  testDir: './e2e',
+  timeout: 60000,
+  workers: 1,
+  retries: process.env.CI ? 2 : 0,
+  use: {
+    baseURL: 'http://localhost:5173',
+    trace: 'retain-on-failure',
+    screenshot: 'only-on-failure',
+  },
+  reporter: [['list']],
+});
