@@ -27,22 +27,38 @@ export interface ExecuteInput {
   ip?: string;
 }
 
+const TYPE_PATTERNS: Record<string, RegExp> = {
+  phone: /^\+?[0-9]{10,14}$/,
+  number: /^[+-]?[0-9]+(\.[0-9]+)?$/,
+  email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+};
+
+function isValidDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [y, m, d] = value.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
+}
+
 function validateFields(service: any, payload: Record<string, any>): string | null {
   for (const f of service.fields ?? []) {
     const v = payload[f.name];
     if (f.required && (v === undefined || v === null || String(v).trim() === '')) {
       return `${f.label} is required`;
     }
-    if (v !== undefined && v !== null && String(v).length > 0) {
-      const s = String(v);
-      if (f.minLength && s.length < f.minLength) return `${f.label} is too short`;
-      if (f.maxLength && s.length > 500) return `${f.label} is too long`;
-      if (f.maxLength && s.length > f.maxLength) return `${f.label} is too long`;
-      if (f.pattern) {
-        try {
-          if (!new RegExp(f.pattern).test(s)) return `${f.label} is invalid`;
-        } catch { /* ignore bad admin regex */ }
-      }
+    if (v === undefined || v === null || String(v).trim() === '') continue;
+    const s = String(v);
+    if (f.minLength && s.length < f.minLength) return `${f.label} is too short`;
+    if (f.maxLength && s.length > f.maxLength) return `${f.label} is too long`;
+    if (f.pattern) {
+      try {
+        if (!new RegExp(f.pattern).test(s)) return `${f.label} is invalid`;
+      } catch { /* ignore bad admin regex */ }
+    }
+    if (f.type === 'date') {
+      if (!isValidDate(s)) return `${f.label} must be a valid date (YYYY-MM-DD)`;
+    } else if (f.type && TYPE_PATTERNS[f.type]) {
+      if (!TYPE_PATTERNS[f.type].test(s)) return `${f.label} is invalid`;
     }
   }
   return null;

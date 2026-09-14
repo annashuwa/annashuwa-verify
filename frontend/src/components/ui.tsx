@@ -1,5 +1,6 @@
-import { ReactNode, useEffect, useState } from 'react';
+import { ReactNode, useCallback, useEffect, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { onNotificationsChanged } from '../lib/notifBus';
 import {
   LayoutDashboard, Grid2x2, Wallet, History, KeyRound, Gift, Bell, LifeBuoy, UserRound,
   BarChart3, Users, Layers, Server, Receipt, FileBarChart, ScrollText, Settings, LogOut,
@@ -94,15 +95,21 @@ export function AppLayout({ children }: { children: ReactNode }) {
     setMenuOpen(false);
   }, [loc.pathname]);
 
-  useEffect(() => {
+  const refreshUnread = useCallback(() => {
     api('/api/notifications')
       .then((r) => setUnread(r.unread || 0))
       .catch(() => {});
-    const t = setInterval(() => {
-      api('/api/notifications').then((r) => setUnread(r.unread || 0)).catch(() => {});
-    }, 60000);
-    return () => clearInterval(t);
   }, []);
+
+  useEffect(() => {
+    refreshUnread();
+    const t = setInterval(refreshUnread, 60000);
+    const off = onNotificationsChanged(refreshUnread);
+    return () => {
+      clearInterval(t);
+      off();
+    };
+  }, [refreshUnread]);
 
   async function logout() {
     try {

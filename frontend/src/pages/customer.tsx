@@ -248,6 +248,12 @@ export function ServiceDetail() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    const firstInvalid = (e.currentTarget as HTMLFormElement).querySelector<HTMLInputElement>('input:invalid');
+    if (firstInvalid) {
+      setError({ body: { message: `Check ${firstInvalid.labels?.[0]?.textContent?.trim() || 'the form fields'} — the value doesn't match the expected format.` } });
+      firstInvalid.focus();
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -298,14 +304,17 @@ export function ServiceDetail() {
               <input
                 id={`f-${f.name}`}
                 className="input font-mono"
+                type={f.type === 'date' ? 'date' : 'text'}
                 value={form[f.name] || ''}
                 onChange={(e) => setForm({ ...form, [f.name]: e.target.value })}
                 required={f.required}
                 minLength={f.minLength}
                 maxLength={f.maxLength}
-                placeholder={f.minLength === 11 ? 'e.g. 12345678901' : `Enter ${f.label.toLowerCase()}`}
+                pattern={f.pattern}
+                title={f.pattern ? `Expected format: ${f.pattern.replaceAll('^', '').replaceAll('$', '')}` : undefined}
+                placeholder={f.type === 'date' ? 'YYYY-MM-DD' : f.minLength === 11 ? 'e.g. 12345678901' : `Enter ${f.label.toLowerCase()}`}
                 autoComplete="off"
-                inputMode={f.type === 'number' || f.minLength === 11 ? 'numeric' : undefined}
+                inputMode={f.type === 'phone' ? 'tel' : f.type === 'number' || f.minLength === 11 ? 'numeric' : undefined}
               />
             </Field>
           ))}

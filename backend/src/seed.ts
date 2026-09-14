@@ -33,7 +33,7 @@ const SERVICES = [
   {
     name: 'BVN Search (Phone)', slug: 'bvn-search', category: 'identity',
     description: 'Search BVN records using a registered phone number.',
-    fields: [{ name: 'phone', label: 'Phone number', type: 'phone', required: true, minLength: 10, maxLength: 14 }],
+    fields: [{ name: 'phone', label: 'Phone number', type: 'phone', required: true, minLength: 10, maxLength: 14, pattern: '^\\+?[0-9]{10,14}$' }],
     priceKobo: 30000, resellerPriceKobo: 27000, apiPriceKobo: 25000, providerCostKobo: 18000,
     providers: ['mock-bvn-1'],
   },
@@ -61,7 +61,7 @@ const SERVICES = [
   {
     name: 'NIN Phone Lookup', slug: 'nin-phone-lookup', category: 'identity',
     description: 'Retrieve the NIN linked to a registered phone number.',
-    fields: [{ name: 'phone', label: 'Phone number', type: 'phone', required: true, minLength: 10, maxLength: 14 }],
+    fields: [{ name: 'phone', label: 'Phone number', type: 'phone', required: true, minLength: 10, maxLength: 14, pattern: '^\\+?[0-9]{10,14}$' }],
     priceKobo: 30000, resellerPriceKobo: 27000, apiPriceKobo: 25000, providerCostKobo: 18000,
     providers: ['mock-nin-1'],
   },

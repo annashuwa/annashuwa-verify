@@ -6,6 +6,7 @@ import {
   Send, Activity, BookOpen, Zap, ShieldCheck,
 } from 'lucide-react';
 import { api, kobo, getAccess } from '../lib/api';
+import { notifyNotificationsChanged } from '../lib/notifBus';
 import { useUser } from '../components/ui';
 import { Logo } from '../components/kit';
 import {
@@ -476,6 +477,7 @@ export function Notifications() {
   async function readAll() {
     await api('/api/notifications/read-all', { method: 'POST', body: JSON.stringify({}) });
     toast('All notifications marked as read', 'info');
+    notifyNotificationsChanged();
     await load();
   }
   const iconFor = (t: string) => {

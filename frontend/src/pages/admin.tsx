@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useMemo, useState } from 'react';
+import { ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   LayoutDashboard, Grid2x2, Users, UserRound, UserCheck, Server, Receipt, FileBarChart,
@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { api, kobo, clearTokens, getAccess } from '../lib/api';
 import { useUser } from '../components/ui';
+import { onNotificationsChanged, notifyNotificationsChanged } from '../lib/notifBus';
 import {
   Logo, Avatar, Button, Field, Badge, EmptyState, ErrorState, InlineError,
   Skeleton, SkeletonCards, SkeletonTable, Tabs, Pagination,
@@ -161,34 +162,32 @@ export function AdminLayout({ children }: { children: ReactNode }) {
   }, [loc.pathname, loc.search]);
 
   // Header signals: personal unread + derived system alerts (all real data).
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const [n, ov, prov] = await Promise.all([
-          api('/api/notifications').catch(() => null),
-          api('/api/admin/overview').catch(() => null),
-          api('/api/admin/providers').catch(() => null),
-        ]);
-        if (cancelled) return;
-        let alerts = 0;
-        if (n) alerts += Number(n.unread ?? 0);
-        const providers: any[] = prov?.data ?? [];
-        alerts += providers.filter((p: any) => p.lowBalance && p.configured !== false).length;
-        alerts += providers.filter((p: any) => ['offline', 'degraded'].includes(p.status)).length;
-        setAlertCount(alerts);
-      } catch { /* header must never break pages */ }
-      try {
-        const h = await fetch('/health');
-        if (!cancelled) setSysOk(h.ok);
-      } catch {
-        if (!cancelled) setSysOk(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+  const refreshHeader = useCallback(async () => {
+    try {
+      const [n, ov, prov] = await Promise.all([
+        api('/api/notifications').catch(() => null),
+        api('/api/admin/overview').catch(() => null),
+        api('/api/admin/providers').catch(() => null),
+      ]);
+      let alerts = 0;
+      if (n) alerts += Number(n.unread ?? 0);
+      const providers: any[] = prov?.data ?? [];
+      alerts += providers.filter((p: any) => p.lowBalance && p.configured !== false).length;
+      alerts += providers.filter((p: any) => ['offline', 'degraded'].includes(p.status)).length;
+      setAlertCount(alerts);
+    } catch { /* header must never break pages */ }
+    try {
+      const h = await fetch('/health');
+      setSysOk(h.ok);
+    } catch {
+      setSysOk(false);
+    }
   }, []);
+
+  useEffect(() => {
+    refreshHeader();
+    return onNotificationsChanged(refreshHeader);
+  }, [refreshHeader]);
 
   async function logout() {
     try {
@@ -1332,7 +1331,7 @@ export function AdminServices() {
   const [error, setError] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({ name: '', slug: '', category: 'identity', description: '', fieldName: 'nin', fieldLabel: 'NIN', price: '250', reseller: '220', apiPrice: '200', cost: '150' });
+  const [form, setForm] = useState({ name: '', slug: '', category: 'identity', description: '', fieldName: 'nin', fieldLabel: 'NIN', fieldType: 'text', fieldRequired: true, fieldMin: '', fieldMax: '', fieldPattern: '', price: '250', reseller: '220', apiPrice: '200', cost: '150' });
 
   async function load() {
     try {
@@ -1382,7 +1381,13 @@ export function AdminServices() {
         body: JSON.stringify({
           name: form.name, slug: form.slug.toLowerCase().trim(), category: form.category,
           description: form.description,
-          fields: [{ name: form.fieldName, label: form.fieldLabel, type: 'text', required: true }],
+          fields: [{
+            name: form.fieldName.trim() || 'id', label: form.fieldLabel.trim() || 'ID', type: form.fieldType,
+            required: form.fieldRequired,
+            ...(form.fieldMin ? { minLength: Math.max(0, Math.min(500, Number(form.fieldMin))) } : {}),
+            ...(form.fieldMax ? { maxLength: Math.max(1, Math.min(500, Number(form.fieldMax))) } : {}),
+            ...(form.fieldPattern.trim() ? { pattern: form.fieldPattern.trim() } : {}),
+          }],
           priceKobo: Math.round(Number(form.price) * 100),
           resellerPriceKobo: Math.round(Number(form.reseller) * 100),
           apiPriceKobo: Math.round(Number(form.apiPrice) * 100),
@@ -1391,7 +1396,7 @@ export function AdminServices() {
         }),
       });
       setShowCreate(false);
-      setForm({ name: '', slug: '', category: 'identity', description: '', fieldName: 'nin', fieldLabel: 'NIN', price: '250', reseller: '220', apiPrice: '200', cost: '150' });
+      setForm({ name: '', slug: '', category: 'identity', description: '', fieldName: 'nin', fieldLabel: 'NIN', fieldType: 'text', fieldRequired: true, fieldMin: '', fieldMax: '', fieldPattern: '', price: '250', reseller: '220', apiPrice: '200', cost: '150' });
       toast('Service created');
       await load();
     } catch (e) {
@@ -1418,8 +1423,23 @@ export function AdminServices() {
                 <option value="education">Education</option><option value="other">Other</option>
               </select>
             </Field>
-            <Field label="ID field name" htmlFor="sfn"><input id="sfn" className="input font-mono text-sm" value={form.fieldName} onChange={(e) => setForm({ ...form, fieldName: e.target.value })} required /></Field>
+            <Field label="ID field name" htmlFor="sfn" hint="JSON key callers submit."><input id="sfn" className="input font-mono text-sm" value={form.fieldName} onChange={(e) => setForm({ ...form, fieldName: e.target.value })} required /></Field>
             <Field label="ID field label" htmlFor="sfl"><input id="sfl" className="input" value={form.fieldLabel} onChange={(e) => setForm({ ...form, fieldLabel: e.target.value })} required /></Field>
+            <Field label="Field type" htmlFor="sft">
+              <select id="sft" className="input" value={form.fieldType} onChange={(e) => setForm({ ...form, fieldType: e.target.value })}>
+                <option value="text">Text</option><option value="number">Number</option>
+                <option value="phone">Phone</option><option value="date">Date</option><option value="select">Select</option>
+              </select>
+            </Field>
+            <Field label="Min length" htmlFor="sfmin"><input id="sfmin" type="number" min="0" max="500" className="input tnum" value={form.fieldMin} onChange={(e) => setForm({ ...form, fieldMin: e.target.value })} /></Field>
+            <Field label="Max length" htmlFor="sfmax"><input id="sfmax" type="number" min="1" max="500" className="input tnum" value={form.fieldMax} onChange={(e) => setForm({ ...form, fieldMax: e.target.value })} /></Field>
+            <Field label="Format pattern (regex)" htmlFor="sfp" hint="e.g. ^[0-9]{11}$ — enforces format before charging."><input id="sfp" className="input font-mono text-sm" placeholder="^[0-9]{11}$" value={form.fieldPattern} onChange={(e) => setForm({ ...form, fieldPattern: e.target.value })} /></Field>
+            <Field label="Required" htmlFor="sfr">
+              <label className="inline-flex items-center gap-2 pt-2 text-sm text-ink-700 cursor-pointer">
+                <input id="sfr" type="checkbox" className="w-4 h-4 accent-brand-600" checked={form.fieldRequired} onChange={(e) => setForm({ ...form, fieldRequired: e.target.checked })} />
+                This field must be provided
+              </label>
+            </Field>
             <Field label="Description" htmlFor="sd"><input id="sd" className="input" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Field>
             <Field label="Customer ₦" htmlFor="sp"><input id="sp" type="number" min="0" className="input tnum" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} required /></Field>
             <Field label="Reseller ₦" htmlFor="sr"><input id="sr" type="number" min="0" className="input tnum" value={form.reseller} onChange={(e) => setForm({ ...form, reseller: e.target.value })} required /></Field>
@@ -2347,11 +2367,13 @@ export function AdminNotifications() {
 
   async function markRead(id: string) {
     await api(`/api/notifications/${id}/read`, { method: 'POST', body: JSON.stringify({}) });
+    notifyNotificationsChanged();
     await load();
   }
   async function markAll() {
     await api('/api/notifications/read-all', { method: 'POST', body: JSON.stringify({}) });
     toast('All notifications marked as read');
+    notifyNotificationsChanged();
     await load();
   }
 
